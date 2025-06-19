@@ -1,0 +1,19 @@
+# Python
+__pycache__/
+*.py[cod]
+*.log
+
+venv/
+env/
+
+.vscode/
+
+
+.env
+config.txt
+message_id.txt
+mc_config.txt
+
+# OS
+.DS_Store
+Thumbs.db
