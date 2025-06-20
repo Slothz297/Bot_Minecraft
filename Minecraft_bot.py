@@ -55,7 +55,6 @@ def get_status_emoji(status):
 def get_status_text(status):
     if not status:
         return 'OFFLINE'
-    
     try:
         server = JavaServer.lookup(f"{domain}:{port}")
         ping = server.ping()
@@ -79,8 +78,7 @@ async def update_status_message(channel, force=False):
         )
         embed.add_field(name="Trạng thái", value=f"{get_status_emoji(status)} **{get_status_text(status)}**", inline=False)
         embed.add_field(name="👥 Người chơi", value=player_info, inline=False)
-        embed.set_footer(text="Tự động cập nhật mỗi 5 giây")
-
+        embed.set_footer(text=f"Tự động cập nhật mỗi {CHECK_INTERVAL} giây")
         if status_message:
             await status_message.edit(embed=embed)
         else:
@@ -178,7 +176,7 @@ async def start(interaction: discord.Interaction):
         )
         embed.add_field(name="Trạng thái", value=f"{get_status_emoji(status)} **{get_status_text(status)}**", inline=False)
         embed.add_field(name="👥 Người chơi", value=player_info, inline=False)
-        embed.set_footer(text="Tự động cập nhật mỗi 5 giây")
+        embed.set_footer(text=f"Tự động cập nhật mỗi {CHECK_INTERVAL} giây")
 
         status_message = await interaction.channel.send(embed=embed)
         with open(MESSAGE_FILE, 'w') as f:
@@ -214,21 +212,34 @@ async def setport(interaction: discord.Interaction, new_port: int):
 @tree.command(name="status", description="Gửi lại trạng thái hiện tại của server")
 async def status(interaction: discord.Interaction):
     global status_message
-    if status_message == None:
-        player_info = get_player_list(domain, port)
-        embed = discord.Embed(
-            title="🎮 Minecraft Server Status",
-            description=f"🌐 Địa chỉ: `{get_display_address()}`",
-            color=discord.Color.green() if status else discord.Color.dark_gray()
-        )
-        embed.add_field(name="Trạng thái", value=f"{get_status_emoji(status)} **{get_status_text(status)}**", inline=False)
-        embed.add_field(name="👥 Người chơi", value=player_info, inline=False)
-        embed.set_footer(text="Tự động cập nhật mỗi 5 giây")
-        status_message = await interaction.channel.send(embed=embed)
-        await status_message.pin()
-        with open(MESSAGE_FILE, 'w') as f:
-            f.write(str(status_message.id))
-    await interaction.response.send_message("✅ Đã gửi lại trạng thái server.", ephemeral=True)
+
+    # Đọc ID từ file và xóa tin nhắn cũ nếu tồn tại
+    if os.path.exists(MESSAGE_FILE):
+        try:
+            with open(MESSAGE_FILE, 'r') as f:
+                old_msg_id = int(f.read().strip())
+            old_msg = await interaction.channel.fetch_message(old_msg_id)
+            await old_msg.delete()
+        except:
+            pass  # Tin nhắn cũ không tồn tại hoặc đã bị xóa
+
+    # Tạo embed mới
+    player_info = get_player_list(domain, port)
+    embed = discord.Embed(
+        title="🎮 Minecraft Server Status",
+        description=f"🌐 Địa chỉ: `{get_display_address()}`",
+        color=discord.Color.green() if is_server_online(domain, port) else discord.Color.dark_gray()
+    )
+    embed.add_field(name="Trạng thái", value=f"{get_status_emoji(is_server_online(domain, port))} **{get_status_text(is_server_online(domain, port))}**", inline=False)
+    embed.add_field(name="👥 Người chơi", value=player_info, inline=False)
+    embed.set_footer(text=f"Tự động cập nhật mỗi {CHECK_INTERVAL} giây")
+
+    # Gửi tin nhắn mới và lưu ID
+    # await interaction.response.defer(thinking=True)
+    status_message = await interaction.channel.send(embed=embed)
+    with open(MESSAGE_FILE, 'w') as f:
+        f.write(str(status_message.id))
+    # await status_message.pin()
 
 
 

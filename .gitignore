@@ -13,6 +13,7 @@ env/
 config.txt
 message_id.txt
 mc_config.txt
+server_config.txt
 
 # OS
 .DS_Store
