@@ -157,7 +157,7 @@ async def on_ready():
 
 async def status_loop(channel):
     while True:
-        await update_status_message(channel)
+        await update_status_message(channel,force=True)
         await asyncio.sleep(CHECK_INTERVAL)
 
 # === LỆNH /start: bot lưu channel hiện tại để cập nhật trạng thái
@@ -170,9 +170,16 @@ async def start(interaction: discord.Interaction):
     await interaction.response.send_message("✅ Bot đã được thiết lập để theo dõi server trong kênh này.",ephemeral=True)
     channel = interaction.channel
     if status_message == None:
-        embed  = discord.Embed(title="🎮 Minecraft Server Status",description=f"🌐 Địa chỉ: {get_display_address()}",color=discord.Color.green() if is_server_online(domain, port) else discord.Color.dark_gray())
-        embed.add_field(name="Trạng thái", value=f"{get_status_emoji(is_server_online(domain, port))} **{get_status_text(is_server_online(domain, port))}**", inline=False)
+        player_info = get_player_list(domain, port)
+        embed = discord.Embed(
+            title="🎮 Minecraft Server Status",
+            description=f"🌐 Địa chỉ: `{get_display_address()}`",
+            color=discord.Color.green() if status else discord.Color.dark_gray()
+        )
+        embed.add_field(name="Trạng thái", value=f"{get_status_emoji(status)} **{get_status_text(status)}**", inline=False)
+        embed.add_field(name="👥 Người chơi", value=player_info, inline=False)
         embed.set_footer(text="Tự động cập nhật mỗi 5 giây")
+
         status_message = await interaction.channel.send(embed=embed)
         with open(MESSAGE_FILE, 'w') as f:
             f.write(str(status_message.id))
@@ -208,8 +215,14 @@ async def setport(interaction: discord.Interaction, new_port: int):
 async def status(interaction: discord.Interaction):
     global status_message
     if status_message == None:
-        embed  = discord.Embed(title="🎮 Minecraft Server Status",description=f"🌐 Địa chỉ: {get_display_address()}",color=discord.Color.green() if is_server_online(domain, port) else discord.Color.dark_gray())
-        embed.add_field(name="Trạng thái", value=f"{get_status_emoji(is_server_online(domain, port))} **{get_status_text(is_server_online(domain, port))}**", inline=False)
+        player_info = get_player_list(domain, port)
+        embed = discord.Embed(
+            title="🎮 Minecraft Server Status",
+            description=f"🌐 Địa chỉ: `{get_display_address()}`",
+            color=discord.Color.green() if status else discord.Color.dark_gray()
+        )
+        embed.add_field(name="Trạng thái", value=f"{get_status_emoji(status)} **{get_status_text(status)}**", inline=False)
+        embed.add_field(name="👥 Người chơi", value=player_info, inline=False)
         embed.set_footer(text="Tự động cập nhật mỗi 5 giây")
         status_message = await interaction.channel.send(embed=embed)
         await status_message.pin()
