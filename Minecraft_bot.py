@@ -4,6 +4,8 @@ import asyncio
 import socket
 import os
 from dotenv import load_dotenv
+from mcstatus import JavaServer
+
 load_dotenv()
 
 # === CẤU HÌNH ===
@@ -24,6 +26,21 @@ last_status = None
 channel_id = None
 msg = None
 
+def get_player_list(host, port):
+    try:
+        server = JavaServer.lookup(f"{host}:{port}")
+        status = server.status()
+        players = status.players
+
+        if players.online == 0:
+            return "Không có người chơi nào online."
+        
+        player_names = [f"👤 *{p.name.upper()}*" for p in players.sample] if players.sample else []
+        names_str = "\n".join(player_names) if player_names else "Ẩn danh"
+        return f"**{players.online}/{players.max}**:\n**{names_str}**"
+    except Exception as e:
+        return "Không thể lấy thông tin người chơi."
+
 
 def is_server_online(host, port):
     try:
@@ -36,18 +53,32 @@ def get_status_emoji(status):
     return '🟢' if status else '⚫'
 
 def get_status_text(status):
-    return 'ONLINE' if status else 'OFFLINE'
+    if not status:
+        return 'OFFLINE'
+    
+    try:
+        server = JavaServer.lookup(f"{domain}:{port}")
+        ping = server.ping()
+        return f'ONLINE ({int(ping)} ms)'
+    except:
+        return 'ONLINE'
 
 def get_display_address():
     return f"{domain}" if port == 25565 else f"{domain}:{port}"
 
-async def update_status_message(channel):
+async def update_status_message(channel, force=False):
     global status_message, last_status
 
     status = is_server_online(domain, port)
-    if status != last_status:
-        embed = discord.Embed(title="🎮 Minecraft Server Status",description=f"🌐 Địa chỉ: `{get_display_address()}`",color=discord.Color.green() if status else discord.Color.dark_gray())
+    if force or status != last_status:
+        player_info = get_player_list(domain, port)
+        embed = discord.Embed(
+            title="🎮 Minecraft Server Status",
+            description=f"🌐 Địa chỉ: `{get_display_address()}`",
+            color=discord.Color.green() if status else discord.Color.dark_gray()
+        )
         embed.add_field(name="Trạng thái", value=f"{get_status_emoji(status)} **{get_status_text(status)}**", inline=False)
+        embed.add_field(name="👥 Người chơi", value=player_info, inline=False)
         embed.set_footer(text="Tự động cập nhật mỗi 5 giây")
 
         if status_message:
@@ -120,6 +151,7 @@ async def on_ready():
                     status_message = await channel.fetch_message(msg_id)
             except:
                 pass
+
         asyncio.create_task(status_loop(channel))
 
 
@@ -132,13 +164,10 @@ async def status_loop(channel):
 @tree.command(name="start", description="Bắt đầu theo dõi trạng thái server Minecraft")
 async def start(interaction: discord.Interaction):
     global channel_id, status_message
-
     channel_id = interaction.channel.id
     with open(CONFIG_FILE, 'w') as f:
         f.write(str(channel_id))
-
     await interaction.response.send_message("✅ Bot đã được thiết lập để theo dõi server trong kênh này.",ephemeral=True)
-
     channel = interaction.channel
     if status_message == None:
         embed  = discord.Embed(title="🎮 Minecraft Server Status",description=f"🌐 Địa chỉ: {get_display_address()}",color=discord.Color.green() if is_server_online(domain, port) else discord.Color.dark_gray())
@@ -147,8 +176,6 @@ async def start(interaction: discord.Interaction):
         status_message = await interaction.channel.send(embed=embed)
         with open(MESSAGE_FILE, 'w') as f:
             f.write(str(status_message.id))
-
-
     asyncio.create_task(status_loop(channel))
 
 
@@ -157,11 +184,9 @@ async def start(interaction: discord.Interaction):
 async def setdomain(interaction: discord.Interaction, new_domain: str):
     global domain
     domain = new_domain
-
     save_config()
     await interaction.response.send_message(f"✅ Đã cập nhật domain thành `{domain}`", ephemeral=True)
-
-    await update_status_message(interaction.channel)
+    await update_status_message(interaction.channel,force = True)
 
 
 
@@ -172,9 +197,8 @@ async def setport(interaction: discord.Interaction, new_port: int):
     port = new_port
     save_config()
     await interaction.response.send_message(f"✅ Đã cập nhật port thành `{port}`", ephemeral=True)
-
     # Cập nhật lại tin nhắn trạng thái
-    await update_status_message(interaction.channel)
+    await update_status_message(interaction.channel,force = True)
     
 
 
@@ -183,14 +207,14 @@ async def setport(interaction: discord.Interaction, new_port: int):
 @tree.command(name="status", description="Gửi lại trạng thái hiện tại của server")
 async def status(interaction: discord.Interaction):
     global status_message
-
-    embed  = discord.Embed(title="🎮 Minecraft Server Status",description=f"🌐 Địa chỉ: {get_display_address()}",color=discord.Color.green() if is_server_online(domain, port) else discord.Color.dark_gray())
-    embed.add_field(name="Trạng thái", value=f"{get_status_emoji(is_server_online(domain, port))} **{get_status_text(is_server_online(domain, port))}**", inline=False)
-    embed.set_footer(text="Tự động cập nhật mỗi 5 giây")
-
-    status_message = await interaction.channel.send(embed=embed)
-    with open(MESSAGE_FILE, 'w') as f:
-        f.write(str(status_message.id))
+    if status_message == None:
+        embed  = discord.Embed(title="🎮 Minecraft Server Status",description=f"🌐 Địa chỉ: {get_display_address()}",color=discord.Color.green() if is_server_online(domain, port) else discord.Color.dark_gray())
+        embed.add_field(name="Trạng thái", value=f"{get_status_emoji(is_server_online(domain, port))} **{get_status_text(is_server_online(domain, port))}**", inline=False)
+        embed.set_footer(text="Tự động cập nhật mỗi 5 giây")
+        status_message = await interaction.channel.send(embed=embed)
+        await status_message.pin()
+        with open(MESSAGE_FILE, 'w') as f:
+            f.write(str(status_message.id))
     await interaction.response.send_message("✅ Đã gửi lại trạng thái server.", ephemeral=True)
 
 
@@ -210,6 +234,7 @@ def run():
 
 def keep_alive():
     Thread(target=run).start()
+    
 keep_alive()
 
 client.run(TOKEN)
